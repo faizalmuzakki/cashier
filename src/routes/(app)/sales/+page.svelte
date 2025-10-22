@@ -95,7 +95,6 @@
 				bind:value={searchQuery}
 				class="input"
 				placeholder="Search product by name, SKU, or scan barcode..."
-				autofocus
 			/>
 		</div>
 
@@ -170,6 +169,7 @@
 									</p>
 								</div>
 								<button
+									aria-label="Remove item"
 									onclick={() => removeItem(index)}
 									class="text-red-600 hover:text-red-700 ml-2"
 								>
@@ -226,7 +226,7 @@
 		<!-- Discount -->
 		{#if cart.length > 0}
 			<div class="border-t border-gray-200 pt-4 mb-4">
-				<label class="block text-sm font-medium text-gray-700 mb-2">Discount</label>
+				<label for="discount" class="block text-sm font-medium text-gray-700 mb-2">Discount</label>
 				<div class="flex gap-2 mb-2">
 					<button
 						onclick={() => (discountType = 'none')}
@@ -255,6 +255,7 @@
 						max={discountType === 'percentage' ? 100 : subtotal}
 						class="input"
 						placeholder={discountType === 'percentage' ? 'Enter %' : 'Enter amount'}
+						id="discount"
 					/>
 				{/if}
 			</div>

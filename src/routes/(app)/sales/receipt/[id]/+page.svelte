@@ -72,8 +72,8 @@
 
 		<!-- Payment Info -->
 		<div class="mb-6">
-			<p class="text-sm text-gray-600">Payment Method: <span class="font-medium text-gray-900">{data.payment.paymentMethod}</span></p>
-			<p class="text-sm text-gray-600">Cashier: <span class="font-medium text-gray-900">{data.cashier.fullName}</span></p>
+			<p class="text-sm text-gray-600">Payment Method: <span class="font-medium text-gray-900">{data.payment?.paymentMethod}</span></p>
+			<p class="text-sm text-gray-600">Cashier: <span class="font-medium text-gray-900">{data.cashier?.fullName}</span></p>
 		</div>
 
 		<div class="text-center text-sm text-gray-500">
@@ -84,13 +84,13 @@
 	<!-- Actions -->
 	<div class="flex gap-3 mt-6">
 		<a href="/sales" class="btn btn-primary flex-1">New Sale</a>
-		<button onclick="window.print()" class="btn btn-secondary">Print</button>
+		<button onclick={() => window.print()} class="btn btn-secondary">Print</button>
 	</div>
 </div>
 
 <style>
 	@media print {
-		body * {
+		:global(body *) {
 			visibility: hidden;
 		}
 		#receipt,

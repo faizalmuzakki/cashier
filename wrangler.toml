@@ -1,0 +1,13 @@
+name = "cashier-app"
+compatibility_date = "2024-10-01"
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+# D1 Database bindings
+[[d1_databases]]
+binding = "DB"
+database_name = "cashier-db"
+database_id = "your-database-id-here"  # Will be replaced when you create the D1 database
+
+# Environment variables
+[vars]
+# Add any public environment variables here

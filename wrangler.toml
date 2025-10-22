@@ -6,7 +6,7 @@ pages_build_output_dir = ".svelte-kit/cloudflare"
 [[d1_databases]]
 binding = "DB"
 database_name = "cashier-db"
-database_id = "your-database-id-here"  # Will be replaced when you create the D1 database
+database_id = "4465ff6d-b161-4c24-8647-46fa31c02d1c"  # Will be replaced when you create the D1 database
 
 # Environment variables
 [vars]

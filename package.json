@@ -11,7 +11,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate": "wrangler d1 execute cashier-db --remote --file=migrations/0001_migration.sql",
+		"db:migrate": "wrangler d1 execute cashier-db --remote --file=migrations/0000_easy_falcon.sql",
 		"db:studio": "drizzle-kit studio",
 		"cf:dev": "wrangler pages dev .svelte-kit/cloudflare --compatibility-date=2024-10-01 --d1=DB",
 		"cf:deploy": "npm run build && wrangler pages deploy .svelte-kit/cloudflare"

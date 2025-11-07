@@ -33,7 +33,25 @@
 	let total = $derived(subtotalAfterDiscount + taxAmount);
 
 	function addToCart(product: any) {
+		// Validate product is active
+		if (!product.isActive) {
+			alert(`Cannot add ${product.name}: Product is not active`);
+			return;
+		}
+
+		// Check current quantity in cart
 		const existing = cart.find((item) => item.productId === product.id);
+		const currentCartQty = existing ? existing.quantity : 0;
+		const availableStock = product.inventory?.quantity ?? 0;
+
+		// Validate stock availability
+		if (currentCartQty + 1 > availableStock) {
+			alert(
+				`Cannot add ${product.name}: Insufficient stock (${availableStock} available, ${currentCartQty} already in cart)`
+			);
+			return;
+		}
+
 		if (existing) {
 			existing.quantity++;
 		} else {
@@ -52,6 +70,18 @@
 		if (newQty <= 0) {
 			cart.splice(index, 1);
 		} else {
+			// Find the product to check stock
+			const cartItem = cart[index];
+			const product = data.products.find((p) => p.id === cartItem.productId);
+			const availableStock = product?.inventory?.quantity ?? 0;
+
+			if (newQty > availableStock) {
+				alert(
+					`Cannot update quantity: Only ${availableStock} units available for ${cartItem.name}`
+				);
+				return;
+			}
+
 			cart[index].quantity = newQty;
 		}
 		cart = [...cart];

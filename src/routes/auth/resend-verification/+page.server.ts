@@ -7,7 +7,7 @@ import { createVerificationToken, sendVerificationEmail } from '$lib/auth/verifi
 
 export const load: PageServerLoad = async ({ locals }) => {
 	// Redirect if already logged in and verified
-	if (locals.user?.emailVerified) {
+	if (locals.user && locals.user.emailVerified) {
 		throw redirect(303, '/dashboard');
 	}
 	return {};

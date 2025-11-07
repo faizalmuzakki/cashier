@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { getDB } from '$lib/db';
 import { users, tenantUsers } from '$lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { verifyPassword } from '$lib/auth/password';
+import { verifyPassword, validateEmail } from '$lib/auth/password';
 import { createSession } from '$lib/auth/session';
 import { Google } from 'arctic';
 
@@ -22,11 +22,16 @@ export const actions: Actions = {
 		}
 
 		const formData = await request.formData();
-		const email = formData.get('email')?.toString();
+		const email = formData.get('email')?.toString()?.toLowerCase()?.trim();
 		const password = formData.get('password')?.toString();
 
 		if (!email || !password) {
 			return fail(400, { error: 'Email and password are required' });
+		}
+
+		// Validate email format
+		if (!validateEmail(email)) {
+			return fail(400, { error: 'Invalid email address' });
 		}
 
 		const db = getDB(platform.env.DB);
@@ -60,7 +65,7 @@ export const actions: Actions = {
 		throw redirect(303, tenantId ? '/dashboard' : '/select-tenant');
 	},
 
-	google: async ({ platform, url }) => {
+	google: async ({ platform, url, cookies }) => {
 		if (!platform?.env?.GOOGLE_CLIENT_ID || !platform?.env?.GOOGLE_CLIENT_SECRET) {
 			return fail(500, { error: 'Google OAuth not configured' });
 		}
@@ -73,6 +78,24 @@ export const actions: Actions = {
 
 		const state = crypto.randomUUID();
 		const codeVerifier = crypto.randomUUID();
+
+		// Store state and code verifier in HTTP-only cookies for PKCE flow
+		cookies.set('oauth_state', state, {
+			path: '/',
+			httpOnly: true,
+			secure: true,
+			sameSite: 'lax',
+			maxAge: 60 * 10 // 10 minutes
+		});
+
+		cookies.set('oauth_code_verifier', codeVerifier, {
+			path: '/',
+			httpOnly: true,
+			secure: true,
+			sameSite: 'lax',
+			maxAge: 60 * 10 // 10 minutes
+		});
+
 		const authUrl = google.createAuthorizationURL(state, codeVerifier, ['openid', 'profile', 'email']);
 
 		throw redirect(303, authUrl.toString());

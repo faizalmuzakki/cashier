@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { getDB } from '$lib/db';
 import { products, inventory, tenantSettings, categories } from '$lib/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, like, or } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals, platform, url }) => {
 	if (!platform?.env?.DB || !locals.tenant) {
@@ -14,8 +14,19 @@ export const load: PageServerLoad = async ({ locals, platform, url }) => {
 	const db = getDB(platform.env.DB);
 	const tenantId = locals.tenant.id;
 
-	const searchQuery = url.searchParams.get('q');
+	let searchQuery = url.searchParams.get('q');
 	const filterLowStock = url.searchParams.get('filter') === 'low-stock';
+
+	// Sanitize search query
+	if (searchQuery) {
+		searchQuery = searchQuery.trim();
+		// Limit search query length to prevent abuse
+		if (searchQuery.length > 100) {
+			searchQuery = searchQuery.substring(0, 100);
+		}
+		// Escape special SQL characters
+		searchQuery = searchQuery.replace(/[_%]/g, '\\$&');
+	}
 
 	const settings = await db
 		.select()
@@ -51,14 +62,15 @@ export const load: PageServerLoad = async ({ locals, platform, url }) => {
 		.where(eq(products.tenantId, tenantId));
 
 	if (searchQuery) {
+		const searchPattern = `%${searchQuery}%`;
 		query = query.where(
 			and(
 				eq(products.tenantId, tenantId),
-				sql`(
-					${products.name} LIKE ${'%' + searchQuery + '%'} OR
-					${products.sku} LIKE ${'%' + searchQuery + '%'} OR
-					${products.barcode} LIKE ${'%' + searchQuery + '%'}
-				)`
+				or(
+					like(products.name, searchPattern),
+					like(products.sku, searchPattern),
+					like(products.barcode, searchPattern)
+				)
 			)
 		);
 	}

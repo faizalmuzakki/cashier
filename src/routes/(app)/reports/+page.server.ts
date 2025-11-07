@@ -15,12 +15,26 @@ export const load: PageServerLoad = async ({ locals, platform, url }) => {
 	const db = getDB(platform.env.DB);
 	const tenantId = locals.tenant.id;
 
+	// Validate and parse date parameter
 	const dateParam = url.searchParams.get('date');
-	const selectedDate = dateParam ? new Date(dateParam) : new Date();
-	
+	let selectedDate = new Date();
+
+	if (dateParam) {
+		try {
+			const parsedDate = new Date(dateParam);
+			// Check if date is valid
+			if (!isNaN(parsedDate.getTime())) {
+				selectedDate = parsedDate;
+			}
+		} catch (error) {
+			// Use current date if parsing fails
+			console.warn('Invalid date parameter:', dateParam);
+		}
+	}
+
 	const startOfDay = new Date(selectedDate);
 	startOfDay.setHours(0, 0, 0, 0);
-	
+
 	const endOfDay = new Date(selectedDate);
 	endOfDay.setHours(23, 59, 59, 999);
 

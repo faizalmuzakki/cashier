@@ -5,7 +5,7 @@ import { categories } from '$lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals, platform }) => {
-	if (!locals.user || !locals.tenantId || !platform?.env?.DB) {
+	if (!locals.user || !locals.tenant || !platform?.env?.DB) {
 		return { categories: [] };
 	}
 
@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 	const allCategories = await db
 		.select()
 		.from(categories)
-		.where(eq(categories.tenantId, locals.tenantId))
+		.where(eq(categories.tenantId, locals.tenant.id))
 		.orderBy(categories.name)
 		.all();
 
@@ -25,7 +25,7 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals, platform }) => {
-		if (!locals.user || !locals.tenantId || !platform?.env?.DB) {
+		if (!locals.user || !locals.tenant || !platform?.env?.DB) {
 			return fail(401, { error: 'Unauthorized' });
 		}
 
@@ -43,7 +43,7 @@ export const actions: Actions = {
 		try {
 			await db.insert(categories).values({
 				id: generateId(),
-				tenantId: locals.tenantId,
+				tenantId: locals.tenant.id,
 				name,
 				description: description || null,
 				parentId
@@ -57,7 +57,7 @@ export const actions: Actions = {
 	},
 
 	update: async ({ request, locals, platform }) => {
-		if (!locals.user || !locals.tenantId || !platform?.env?.DB) {
+		if (!locals.user || !locals.tenant || !platform?.env?.DB) {
 			return fail(401, { error: 'Unauthorized' });
 		}
 
@@ -81,7 +81,7 @@ export const actions: Actions = {
 					description: description || null,
 					parentId
 				})
-				.where(and(eq(categories.id, id), eq(categories.tenantId, locals.tenantId)));
+				.where(and(eq(categories.id, id), eq(categories.tenantId, locals.tenant.id)));
 
 			return { success: true, message: 'Category updated successfully' };
 		} catch (error) {
@@ -91,7 +91,7 @@ export const actions: Actions = {
 	},
 
 	delete: async ({ request, locals, platform }) => {
-		if (!locals.user || !locals.tenantId || !platform?.env?.DB) {
+		if (!locals.user || !locals.tenant || !platform?.env?.DB) {
 			return fail(401, { error: 'Unauthorized' });
 		}
 
@@ -107,7 +107,7 @@ export const actions: Actions = {
 		try {
 			await db
 				.delete(categories)
-				.where(and(eq(categories.id, id), eq(categories.tenantId, locals.tenantId)));
+				.where(and(eq(categories.id, id), eq(categories.tenantId, locals.tenant.id)));
 
 			return { success: true, message: 'Category deleted successfully' };
 		} catch (error) {

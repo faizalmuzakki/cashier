@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { getDB } from '$lib/db';
 import { products, inventory, tenantSettings, categories } from '$lib/db/schema';
-import { eq, and, sql, like, or } from 'drizzle-orm';
+import { eq, and, like, or } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals, platform, url }) => {
 	if (!platform?.env?.DB || !locals.tenant) {
@@ -41,7 +41,21 @@ export const load: PageServerLoad = async ({ locals, platform, url }) => {
 		.orderBy(categories.name)
 		.all();
 
-	let query = db
+	// Build where conditions
+	const whereConditions = [eq(products.tenantId, tenantId)];
+
+	if (searchQuery) {
+		const searchPattern = `%${searchQuery}%`;
+		whereConditions.push(
+			or(
+				like(products.name, searchPattern),
+				like(products.sku, searchPattern),
+				like(products.barcode, searchPattern)
+			)!
+		);
+	}
+
+	const allProducts = await db
 		.select({
 			id: products.id,
 			name: products.name,
@@ -59,32 +73,17 @@ export const load: PageServerLoad = async ({ locals, platform, url }) => {
 		})
 		.from(products)
 		.leftJoin(inventory, eq(inventory.productId, products.id))
-		.where(eq(products.tenantId, tenantId));
+		.where(and(...whereConditions))
+		.all();
 
-	if (searchQuery) {
-		const searchPattern = `%${searchQuery}%`;
-		query = query.where(
-			and(
-				eq(products.tenantId, tenantId),
-				or(
-					like(products.name, searchPattern),
-					like(products.sku, searchPattern),
-					like(products.barcode, searchPattern)
-				)
+	const filteredProducts = filterLowStock
+		? allProducts.filter(
+				(p) => p.inventory && p.inventory.quantity <= (p.inventory.lowStockThreshold || 10)
 			)
-		);
-	}
-
-	let allProducts = await query.all();
-
-	if (filterLowStock) {
-		allProducts = allProducts.filter(
-			(p) => p.inventory && p.inventory.quantity <= (p.inventory.lowStockThreshold || 10)
-		);
-	}
+		: allProducts;
 
 	return {
-		products: allProducts,
+		products: filteredProducts,
 		categories: allCategories,
 		settings: {
 			currency: settings?.currency || 'IDR'

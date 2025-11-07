@@ -5,6 +5,8 @@ import { eq, and } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 
 // Simple in-memory rate limiter for auth endpoints
+// Note: Cloudflare Workers are stateless, so this resets on each deployment
+// For production, consider using Cloudflare's built-in rate limiting or Durable Objects
 interface RateLimitEntry {
 	count: number;
 	resetAt: number;
@@ -12,24 +14,21 @@ interface RateLimitEntry {
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
-// Clean up old entries every 5 minutes
-setInterval(() => {
-	const now = Date.now();
-	for (const [key, entry] of rateLimitStore.entries()) {
-		if (entry.resetAt < now) {
-			rateLimitStore.delete(key);
-		}
-	}
-}, 5 * 60 * 1000);
-
 function checkRateLimit(ip: string, path: string): boolean {
 	// Rate limit: 10 requests per minute for auth endpoints
 	const key = `${ip}:${path}`;
 	const now = Date.now();
 	const entry = rateLimitStore.get(key);
 
-	if (!entry || entry.resetAt < now) {
-		// New entry or expired, create/reset
+	// Clean up expired entries inline (no setInterval in Workers)
+	if (entry && entry.resetAt < now) {
+		rateLimitStore.delete(key);
+	}
+
+	const currentEntry = rateLimitStore.get(key);
+
+	if (!currentEntry) {
+		// New entry, create
 		rateLimitStore.set(key, {
 			count: 1,
 			resetAt: now + 60 * 1000 // 1 minute
@@ -37,18 +36,21 @@ function checkRateLimit(ip: string, path: string): boolean {
 		return true;
 	}
 
-	if (entry.count >= 10) {
+	if (currentEntry.count >= 10) {
 		return false; // Rate limit exceeded
 	}
 
-	entry.count++;
+	currentEntry.count++;
 	return true;
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Rate limiting for auth endpoints
 	const authPaths = ['/auth/login', '/auth/signup', '/auth/resend-verification'];
-	if (authPaths.some(path => event.url.pathname.startsWith(path)) && event.request.method === 'POST') {
+	if (
+		authPaths.some((path) => event.url.pathname.startsWith(path)) &&
+		event.request.method === 'POST'
+	) {
 		const ip = event.getClientAddress();
 		if (!checkRateLimit(ip, event.url.pathname)) {
 			throw error(429, 'Too many requests. Please try again later.');
@@ -97,7 +99,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 					event.locals.user = {
 						id: sessionData.user.id,
 						email: sessionData.user.email,
-						fullName: sessionData.user.fullName
+						fullName: sessionData.user.fullName,
+						emailVerified: sessionData.user.emailVerified
 					};
 
 					if (sessionData.tenant && sessionData.tenantUser) {

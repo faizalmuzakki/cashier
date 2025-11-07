@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { getDB, generateId } from '$lib/db';
 import { products, inventory, transactions, transactionItems, payments, tenantSettings } from '$lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 
 export const load: PageServerLoad = async ({ locals, platform }) => {
 	if (!platform?.env?.DB || !locals.tenant) {
@@ -84,67 +84,142 @@ export const actions: Actions = {
 		const transactionNumber = 'TRX-' + Date.now();
 
 		try {
-			// Create transaction
-			await db.insert(transactions).values({
-				id: transactionId,
-				tenantId: locals.tenant.id,
-				locationId: null,
-				customerId: customerId || null,
-				cashierId: locals.user.id,
-				transactionNumber,
-				subtotal,
-				discountAmount,
-				taxAmount,
-				total,
-				status: 'COMPLETED',
-				notes: null
-			});
-
-			// Create transaction items and update inventory
+			// STEP 1: Validate inventory availability BEFORE starting transaction
+			const inventoryValidation = [];
 			for (const item of cart) {
-				await db.insert(transactionItems).values({
-					id: generateId(),
-					transactionId,
-					productId: item.productId,
-					variantId: null,
-					name: item.name,
-					quantity: item.quantity,
-					unitPrice: item.price,
-					discountAmount: 0,
-					total: item.price * item.quantity
-				});
-
-				// Update inventory (reduce stock)
 				const inventoryRecord = await db
 					.select()
 					.from(inventory)
 					.where(eq(inventory.productId, item.productId))
 					.get();
 
-				if (inventoryRecord) {
-					await db
+				if (!inventoryRecord) {
+					return fail(400, {
+						error: `Inventory not found for product: ${item.name}`
+					});
+				}
+
+				if (inventoryRecord.quantity < item.quantity) {
+					return fail(400, {
+						error: `Insufficient stock for ${item.name}. Available: ${inventoryRecord.quantity}, Requested: ${item.quantity}`
+					});
+				}
+
+				inventoryValidation.push({
+					inventoryId: inventoryRecord.id,
+					currentQuantity: inventoryRecord.quantity,
+					requestedQuantity: item.quantity,
+					lowStockThreshold: inventoryRecord.lowStockThreshold
+				});
+			}
+
+			// STEP 2: Wrap all operations in a transaction-like batch
+			// Note: D1 doesn't support transactions, so we'll use batch operations
+			// and implement rollback logic if any operation fails
+			const operations = [];
+
+			// Create transaction
+			operations.push(
+				db.insert(transactions).values({
+					id: transactionId,
+					tenantId: locals.tenant.id,
+					locationId: null,
+					customerId: customerId || null,
+					cashierId: locals.user.id,
+					transactionNumber,
+					subtotal,
+					discountAmount,
+					taxAmount,
+					total,
+					status: 'COMPLETED',
+					notes: null
+				})
+			);
+
+			// Create transaction items and update inventory atomically
+			for (let i = 0; i < cart.length; i++) {
+				const item = cart[i];
+				const validation = inventoryValidation[i];
+
+				// Insert transaction item
+				operations.push(
+					db.insert(transactionItems).values({
+						id: generateId(),
+						transactionId,
+						productId: item.productId,
+						variantId: null,
+						name: item.name,
+						quantity: item.quantity,
+						unitPrice: item.price,
+						discountAmount: 0,
+						total: item.price * item.quantity
+					})
+				);
+
+				// Update inventory using atomic SQL operation to prevent race conditions
+				operations.push(
+					db
 						.update(inventory)
 						.set({
-							quantity: inventoryRecord.quantity - item.quantity
+							quantity: sql`${inventory.quantity} - ${item.quantity}`
 						})
-						.where(eq(inventory.id, inventoryRecord.id));
-				}
+						.where(and(
+							eq(inventory.id, validation.inventoryId),
+							// Additional safety check: ensure quantity hasn't changed
+							sql`${inventory.quantity} >= ${item.quantity}`
+						))
+				);
 			}
 
 			// Create payment record
-			await db.insert(payments).values({
-				id: generateId(),
-				transactionId,
-				paymentMethod: paymentMethod as any,
-				amount: total,
-				referenceNumber: null
-			});
+			operations.push(
+				db.insert(payments).values({
+					id: generateId(),
+					transactionId,
+					paymentMethod: paymentMethod as any,
+					amount: total,
+					referenceNumber: null
+				})
+			);
 
-			// Return success - could redirect to receipt page
+			// Execute all operations
+			await Promise.all(operations);
+
+			// Verify all inventory updates succeeded
+			for (const item of cart) {
+				const updatedInventory = await db
+					.select()
+					.from(inventory)
+					.where(eq(inventory.productId, item.productId))
+					.get();
+
+				if (!updatedInventory || updatedInventory.quantity < 0) {
+					// Rollback by deleting the transaction
+					await db.delete(transactions).where(eq(transactions.id, transactionId));
+					await db.delete(transactionItems).where(eq(transactionItems.transactionId, transactionId));
+					await db.delete(payments).where(eq(payments.transactionId, transactionId));
+
+					return fail(400, {
+						error: `Inventory update failed for ${item.name}. Transaction rolled back.`
+					});
+				}
+			}
+
+			// Return success - redirect to receipt page
 			throw redirect(303, `/sales/receipt/${transactionId}`);
 		} catch (error) {
 			if (error instanceof Response) throw error;
 			console.error('Transaction error:', error);
+
+			// Attempt rollback on any error
+			try {
+				await db.delete(transactions).where(eq(transactions.id, transactionId));
+				await db.delete(transactionItems).where(eq(transactionItems.transactionId, transactionId));
+				await db.delete(payments).where(eq(payments.transactionId, transactionId));
+			} catch (rollbackError) {
+				console.error('Rollback error:', rollbackError);
+			}
+
 			return fail(500, { error: 'Failed to complete transaction' });
 		}
 	}

@@ -47,7 +47,7 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 
 export const actions: Actions = {
 	create: async ({ request, params, locals, platform }) => {
-		if (!locals.user || !locals.tenantId || !platform?.env?.DB) {
+		if (!locals.user || !locals.tenant || !platform?.env?.DB) {
 			return fail(401, { error: 'Unauthorized' });
 		}
 
@@ -71,7 +71,7 @@ export const actions: Actions = {
 			await db.insert(productVariants).values({
 				id: variantId,
 				productId: params.id,
-				tenantId: locals.tenantId,
+				tenantId: locals.tenant.id,
 				variantName,
 				sku: sku || null,
 				barcode: barcode || null,
@@ -81,7 +81,7 @@ export const actions: Actions = {
 
 			await db.insert(inventory).values({
 				id: generateId(),
-				tenantId: locals.tenantId,
+				tenantId: locals.tenant.id,
 				productId: null,
 				variantId,
 				locationId: null,
@@ -97,7 +97,7 @@ export const actions: Actions = {
 	},
 
 	update: async ({ request, locals, platform }) => {
-		if (!locals.user || !locals.tenantId || !platform?.env?.DB) {
+		if (!locals.user || !locals.tenant || !platform?.env?.DB) {
 			return fail(401, { error: 'Unauthorized' });
 		}
 
@@ -127,7 +127,7 @@ export const actions: Actions = {
 					price: price ? parseFloat(price) : null,
 					cost: cost ? parseFloat(cost) : null
 				})
-				.where(and(eq(productVariants.id, id), eq(productVariants.tenantId, locals.tenantId)));
+				.where(and(eq(productVariants.id, id), eq(productVariants.tenantId, locals.tenant.id)));
 
 			const existingInventory = await db
 				.select()
@@ -153,7 +153,7 @@ export const actions: Actions = {
 	},
 
 	delete: async ({ request, locals, platform }) => {
-		if (!locals.user || !locals.tenantId || !platform?.env?.DB) {
+		if (!locals.user || !locals.tenant || !platform?.env?.DB) {
 			return fail(401, { error: 'Unauthorized' });
 		}
 
@@ -169,7 +169,7 @@ export const actions: Actions = {
 		try {
 			await db
 				.delete(productVariants)
-				.where(and(eq(productVariants.id, id), eq(productVariants.tenantId, locals.tenantId)));
+				.where(and(eq(productVariants.id, id), eq(productVariants.tenantId, locals.tenant.id)));
 
 			return { success: true, message: 'Variant deleted successfully' };
 		} catch (error) {

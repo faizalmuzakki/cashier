@@ -58,10 +58,36 @@ export const actions: Actions = {
 		try {
 			const userId = generateId();
 			const tenantId = generateId();
-			const slug = businessName
+
+			// Generate unique slug with collision checking
+			let slug = businessName
 				.toLowerCase()
 				.replace(/[^a-z0-9]+/g, '-')
-				.replace(/^-|-$/g, '') + '-' + Math.random().toString(36).substring(2, 7);
+				.replace(/^-|-$/g, '');
+
+			// Check for slug uniqueness and append random string if needed
+			let slugExists = true;
+			let attempts = 0;
+			while (slugExists && attempts < 5) {
+				const randomSuffix = Math.random().toString(36).substring(2, 10);
+				const potentialSlug = slug + '-' + randomSuffix;
+
+				const existingTenant = await db
+					.select()
+					.from(tenants)
+					.where(eq(tenants.slug, potentialSlug))
+					.get();
+
+				if (!existingTenant) {
+					slug = potentialSlug;
+					slugExists = false;
+				}
+				attempts++;
+			}
+
+			if (slugExists) {
+				return fail(500, { error: 'Failed to generate unique slug. Please try again.', fullName, email, businessName });
+			}
 
 			// Create user
 			await db.insert(users).values({
@@ -112,7 +138,7 @@ export const actions: Actions = {
 		}
 	},
 
-	google: async ({ platform, url }) => {
+	google: async ({ platform, url, cookies }) => {
 		if (!platform?.env?.GOOGLE_CLIENT_ID || !platform?.env?.GOOGLE_CLIENT_SECRET) {
 			return fail(500, { error: 'Google OAuth not configured' });
 		}
@@ -125,6 +151,24 @@ export const actions: Actions = {
 
 		const state = crypto.randomUUID();
 		const codeVerifier = crypto.randomUUID();
+
+		// Store state and code verifier in HTTP-only cookies for PKCE flow
+		cookies.set('oauth_state', state, {
+			path: '/',
+			httpOnly: true,
+			secure: true,
+			sameSite: 'lax',
+			maxAge: 60 * 10 // 10 minutes
+		});
+
+		cookies.set('oauth_code_verifier', codeVerifier, {
+			path: '/',
+			httpOnly: true,
+			secure: true,
+			sameSite: 'lax',
+			maxAge: 60 * 10 // 10 minutes
+		});
+
 		const authUrl = google.createAuthorizationURL(state, codeVerifier, ['openid', 'profile', 'email']);
 
 		throw redirect(303, authUrl.toString());

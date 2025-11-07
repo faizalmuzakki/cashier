@@ -18,6 +18,21 @@ export const GET: RequestHandler = async ({ url, platform, cookies }) => {
 		throw redirect(303, '/auth/login?error=invalid_oauth');
 	}
 
+	// Validate state and retrieve code verifier from cookies
+	const storedState = cookies.get('oauth_state');
+	const storedCodeVerifier = cookies.get('oauth_code_verifier');
+
+	if (!storedState || !storedCodeVerifier || storedState !== state) {
+		// Clear cookies and reject
+		cookies.delete('oauth_state', { path: '/' });
+		cookies.delete('oauth_code_verifier', { path: '/' });
+		throw redirect(303, '/auth/login?error=invalid_state');
+	}
+
+	// Clear the cookies after validation
+	cookies.delete('oauth_state', { path: '/' });
+	cookies.delete('oauth_code_verifier', { path: '/' });
+
 	try {
 		const google = new Google(
 			platform.env.GOOGLE_CLIENT_ID,
@@ -25,7 +40,8 @@ export const GET: RequestHandler = async ({ url, platform, cookies }) => {
 			platform.env.GOOGLE_REDIRECT_URI || `${url.origin}/auth/callback/google`
 		);
 
-		const tokens = await google.validateAuthorizationCode(code);
+		// Use code verifier for PKCE flow
+		const tokens = await google.validateAuthorizationCode(code, storedCodeVerifier);
 		const accessToken = tokens.accessToken();
 
 		// Fetch user info from Google
@@ -63,10 +79,36 @@ export const GET: RequestHandler = async ({ url, platform, cookies }) => {
 		if (!user) {
 			const userId = generateId();
 			const tenantId = generateId();
-			const slug = name
+
+			// Generate unique slug with collision checking
+			let slug = name
 				.toLowerCase()
 				.replace(/[^a-z0-9]+/g, '-')
-				.replace(/^-|-$/g, '') + '-' + Math.random().toString(36).substring(2, 7);
+				.replace(/^-|-$/g, '');
+
+			// Check for slug uniqueness and append random string if needed
+			let slugExists = true;
+			let attempts = 0;
+			while (slugExists && attempts < 5) {
+				const randomSuffix = Math.random().toString(36).substring(2, 10);
+				const potentialSlug = slug + '-' + randomSuffix;
+
+				const existingTenant = await db
+					.select()
+					.from(tenants)
+					.where(eq(tenants.slug, potentialSlug))
+					.get();
+
+				if (!existingTenant) {
+					slug = potentialSlug;
+					slugExists = false;
+				}
+				attempts++;
+			}
+
+			if (slugExists) {
+				throw redirect(303, '/auth/login?error=slug_generation_failed');
+			}
 
 			// Create user
 			await db.insert(users).values({

@@ -10,6 +10,7 @@ declare global {
 				id: string;
 				email: string;
 				fullName: string;
+				emailVerified: boolean;
 			} | null;
 			tenant: {
 				id: string;
@@ -33,7 +34,7 @@ declare global {
 				SESSION_SECRET: string;
 			};
 			context: {
-				waitUntil(promise: Promise<any>): void;
+				waitUntil(promise: Promise<unknown>): void;
 			};
 			caches: CacheStorage & { default: Cache };
 		}

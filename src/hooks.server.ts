@@ -47,7 +47,10 @@ function checkRateLimit(ip: string, path: string): boolean {
 export const handle: Handle = async ({ event, resolve }) => {
 	// Rate limiting for auth endpoints
 	const authPaths = ['/auth/login', '/auth/signup', '/auth/resend-verification'];
-	if (authPaths.some(path => event.url.pathname.startsWith(path)) && event.request.method === 'POST') {
+	if (
+		authPaths.some((path) => event.url.pathname.startsWith(path)) &&
+		event.request.method === 'POST'
+	) {
 		const ip = event.getClientAddress();
 		if (!checkRateLimit(ip, event.url.pathname)) {
 			throw error(429, 'Too many requests. Please try again later.');
@@ -96,7 +99,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 					event.locals.user = {
 						id: sessionData.user.id,
 						email: sessionData.user.email,
-						fullName: sessionData.user.fullName
+						fullName: sessionData.user.fullName,
+						emailVerified: sessionData.user.emailVerified
 					};
 
 					if (sessionData.tenant && sessionData.tenantUser) {

@@ -4,7 +4,10 @@ import { transactions, transactionItems, users, tenantSettings } from '$lib/db/s
 import { eq, and, gte, lte, count, sum, sql } from 'drizzle-orm';
 
 // Helper to get date range in tenant's timezone
-function getDateRange(dateString: string | null, timezone: string = 'UTC'): { start: Date; end: Date } {
+function getDateRange(
+	dateString: string | null,
+	timezone: string = 'UTC'
+): { start: Date; end: Date } {
 	let selectedDate = new Date();
 
 	if (dateString) {
@@ -13,7 +16,7 @@ function getDateRange(dateString: string | null, timezone: string = 'UTC'): { st
 			if (!isNaN(parsedDate.getTime())) {
 				selectedDate = parsedDate;
 			}
-		} catch (error) {
+		} catch {
 			console.warn('Invalid date parameter:', dateString);
 		}
 	}

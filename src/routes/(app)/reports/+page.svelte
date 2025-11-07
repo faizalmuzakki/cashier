@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { formatCurrency } from '$lib/utils/currency';
-	import { formatDate, formatDateTime } from '$lib/utils/date';
+	import { formatDateTime } from '$lib/utils/date';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -64,7 +64,12 @@
 
 		{#if data.transactions.length === 0}
 			<div class="text-center py-12">
-				<svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<svg
+					class="w-16 h-16 mx-auto text-gray-400 mb-4"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"
@@ -78,7 +83,10 @@
 			<!-- Mobile View -->
 			<div class="lg:hidden space-y-3">
 				{#each data.transactions as transaction}
-					<a href="/sales/receipt/{transaction.id}" class="card block hover:shadow-md transition-shadow">
+					<a
+						href="/sales/receipt/{transaction.id}"
+						class="card block hover:shadow-md transition-shadow"
+					>
 						<div class="flex items-center justify-between mb-2">
 							<span class="font-semibold text-gray-900">{transaction.transactionNumber}</span>
 							<span class="text-xs text-gray-500">{formatDateTime(transaction.createdAt)}</span>
@@ -98,26 +106,40 @@
 				<table class="min-w-full divide-y divide-gray-200">
 					<thead class="bg-gray-50">
 						<tr>
-							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Receipt #</th>
+							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+								>Receipt #</th
+							>
 							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
 							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
-							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cashier</th>
-							<th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
-							<th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+								>Cashier</th
+							>
+							<th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th
+							>
+							<th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase"
+								>Actions</th
+							>
 						</tr>
 					</thead>
 					<tbody class="bg-white divide-y divide-gray-200">
 						{#each data.transactions as transaction}
 							<tr class="hover:bg-gray-50">
-								<td class="px-6 py-4 text-sm font-medium text-gray-900">{transaction.transactionNumber}</td>
-								<td class="px-6 py-4 text-sm text-gray-500">{formatDateTime(transaction.createdAt)}</td>
+								<td class="px-6 py-4 text-sm font-medium text-gray-900"
+									>{transaction.transactionNumber}</td
+								>
+								<td class="px-6 py-4 text-sm text-gray-500"
+									>{formatDateTime(transaction.createdAt)}</td
+								>
 								<td class="px-6 py-4 text-sm text-gray-500">{transaction.itemCount}</td>
 								<td class="px-6 py-4 text-sm text-gray-500">{transaction.cashierName}</td>
 								<td class="px-6 py-4 text-sm font-medium text-gray-900 text-right">
 									{formatCurrency(transaction.total, data.settings.currency)}
 								</td>
 								<td class="px-6 py-4 text-sm text-right">
-									<a href="/sales/receipt/{transaction.id}" class="text-primary-600 hover:text-primary-700">
+									<a
+										href="/sales/receipt/{transaction.id}"
+										class="text-primary-600 hover:text-primary-700"
+									>
 										View
 									</a>
 								</td>

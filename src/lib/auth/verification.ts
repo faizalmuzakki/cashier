@@ -1,6 +1,7 @@
 import { encodeHexLowerCase } from '@oslojs/encoding';
 import { sha256 } from '@oslojs/crypto/sha2';
 import type { DrizzleD1Database } from 'drizzle-orm/d1';
+import * as schema from '$lib/db/schema';
 import { verificationTokens, users } from '$lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { generateId } from '$lib/db';
@@ -13,7 +14,10 @@ export function generateVerificationToken(): string {
 	return encodeHexLowerCase(bytes);
 }
 
-export async function createVerificationToken(db: DrizzleD1Database, userId: string): Promise<string> {
+export async function createVerificationToken(
+	db: DrizzleD1Database<typeof schema>,
+	userId: string
+): Promise<string> {
 	// Delete any existing verification tokens for this user
 	await db.delete(verificationTokens).where(eq(verificationTokens.userId, userId));
 
@@ -30,7 +34,10 @@ export async function createVerificationToken(db: DrizzleD1Database, userId: str
 	return token;
 }
 
-export async function verifyEmail(db: DrizzleD1Database, token: string): Promise<boolean> {
+export async function verifyEmail(
+	db: DrizzleD1Database<typeof schema>,
+	token: string
+): Promise<boolean> {
 	const tokenHash = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
 
 	const verificationToken = await db
@@ -50,10 +57,7 @@ export async function verifyEmail(db: DrizzleD1Database, token: string): Promise
 	}
 
 	// Mark email as verified
-	await db
-		.update(users)
-		.set({ emailVerified: true })
-		.where(eq(users.id, verificationToken.userId));
+	await db.update(users).set({ emailVerified: true }).where(eq(users.id, verificationToken.userId));
 
 	// Delete the verification token
 	await db.delete(verificationTokens).where(eq(verificationTokens.id, verificationToken.id));
@@ -61,11 +65,16 @@ export async function verifyEmail(db: DrizzleD1Database, token: string): Promise
 	return true;
 }
 
-export async function sendVerificationEmail(email: string, token: string, origin: string): Promise<void> {
+export async function sendVerificationEmail(
+	email: string,
+	token: string,
+	origin: string
+): Promise<void> {
 	const verificationUrl = `${origin}/auth/verify-email?token=${token}`;
 
 	// For now, we'll just log the verification URL
 	// In production, you'd integrate with an email service like Resend, SendGrid, etc.
+	// eslint-disable-next-line no-console
 	console.log(`
 =========================================
 EMAIL VERIFICATION

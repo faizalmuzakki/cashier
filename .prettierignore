@@ -1,0 +1,8 @@
+.svelte-kit
+build
+dist
+node_modules
+.DS_Store
+migrations
+*.min.js
+*.min.css

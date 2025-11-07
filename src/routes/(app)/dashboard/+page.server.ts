@@ -3,6 +3,15 @@ import { getDB } from '$lib/db';
 import { products, transactions, inventory, tenantSettings } from '$lib/db/schema';
 import { eq, and, gte, count, sum, sql } from 'drizzle-orm';
 
+// Helper to get start of day in tenant's timezone
+function getStartOfDay(timezone: string = 'UTC'): Date {
+	const now = new Date();
+	// For simplicity, using UTC. In production, use a library like date-fns-tz for proper timezone handling
+	const startOfDay = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+	startOfDay.setHours(0, 0, 0, 0);
+	return startOfDay;
+}
+
 export const load: PageServerLoad = async ({ locals, platform }) => {
 	if (!platform?.env?.DB || !locals.tenant) {
 		return {
@@ -13,24 +22,25 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 				lowStockCount: 0
 			},
 			recentTransactions: [],
-			settings: { currency: 'IDR' }
+			settings: { currency: 'IDR', timezone: 'UTC' }
 		};
 	}
 
 	const db = getDB(platform.env.DB);
 	const tenantId = locals.tenant.id;
 
-	// Get today's date range
-	const today = new Date();
-	today.setHours(0, 0, 0, 0);
-	const todayTimestamp = Math.floor(today.getTime() / 1000);
-
-	// Get tenant settings
+	// Get tenant settings first to use the correct timezone
 	const settings = await db
 		.select()
 		.from(tenantSettings)
 		.where(eq(tenantSettings.tenantId, tenantId))
 		.get();
+
+	const tenantTimezone = settings?.timezone || 'UTC';
+
+	// Get today's date range using tenant's timezone
+	const today = getStartOfDay(tenantTimezone);
+	const todayTimestamp = Math.floor(today.getTime() / 1000);
 
 	// Get today's sales stats
 	const todayStats = await db
@@ -78,14 +88,15 @@ export const load: PageServerLoad = async ({ locals, platform }) => {
 
 	return {
 		stats: {
-			todaySales: Number(todayStats?.totalSales || 0),
-			todayTransactions: Number(todayStats?.transactionCount || 0),
-			totalProducts: Number(productStats?.count || 0),
-			lowStockCount: Number(lowStockStats?.count || 0)
+			todaySales: todayStats?.totalSales ? Number(todayStats.totalSales) : 0,
+			todayTransactions: todayStats?.transactionCount ? Number(todayStats.transactionCount) : 0,
+			totalProducts: productStats?.count ? Number(productStats.count) : 0,
+			lowStockCount: lowStockStats?.count ? Number(lowStockStats.count) : 0
 		},
 		recentTransactions,
 		settings: {
-			currency: settings?.currency || 'IDR'
+			currency: settings?.currency || 'IDR',
+			timezone: tenantTimezone
 		}
 	};
 };

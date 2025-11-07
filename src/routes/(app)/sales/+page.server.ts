@@ -4,6 +4,9 @@ import { getDB, generateId } from '$lib/db';
 import { products, inventory, transactions, transactionItems, payments, tenantSettings } from '$lib/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
+// Payment method types from schema
+type PaymentMethod = 'CASH' | 'CARD' | 'DIGITAL_WALLET' | 'OTHER';
+
 export const load: PageServerLoad = async ({ locals, platform }) => {
 	if (!platform?.env?.DB || !locals.tenant) {
 		return {
@@ -68,10 +71,17 @@ export const actions: Actions = {
 		const discountAmount = parseFloat(formData.get('discountAmount')?.toString() || '0');
 		const taxAmount = parseFloat(formData.get('taxAmount')?.toString() || '0');
 		const total = parseFloat(formData.get('total')?.toString() || '0');
-		const paymentMethod = formData.get('paymentMethod')?.toString();
+		const paymentMethodRaw = formData.get('paymentMethod')?.toString();
 
-		if (!cartData || !paymentMethod) {
+		if (!cartData || !paymentMethodRaw) {
 			return fail(400, { error: 'Missing required data' });
+		}
+
+		// Validate payment method
+		const validPaymentMethods: PaymentMethod[] = ['CASH', 'CARD', 'DIGITAL_WALLET', 'OTHER'];
+		const paymentMethod = paymentMethodRaw.toUpperCase();
+		if (!validPaymentMethods.includes(paymentMethod as PaymentMethod)) {
+			return fail(400, { error: 'Invalid payment method' });
 		}
 
 		const cart = JSON.parse(cartData);
@@ -86,6 +96,8 @@ export const actions: Actions = {
 		try {
 			// STEP 1: Validate inventory availability BEFORE starting transaction
 			const inventoryValidation = [];
+			const lowStockWarnings: string[] = [];
+
 			for (const item of cart) {
 				const inventoryRecord = await db
 					.select()
@@ -105,12 +117,26 @@ export const actions: Actions = {
 					});
 				}
 
+				// Check for low stock after this sale
+				const remainingStock = inventoryRecord.quantity - item.quantity;
+				const threshold = inventoryRecord.lowStockThreshold || 10;
+				if (remainingStock <= threshold) {
+					lowStockWarnings.push(
+						`Warning: ${item.name} will have low stock (${remainingStock} remaining, threshold: ${threshold})`
+					);
+				}
+
 				inventoryValidation.push({
 					inventoryId: inventoryRecord.id,
 					currentQuantity: inventoryRecord.quantity,
 					requestedQuantity: item.quantity,
 					lowStockThreshold: inventoryRecord.lowStockThreshold
 				});
+			}
+
+			// Log warnings to console for monitoring
+			if (lowStockWarnings.length > 0) {
+				console.warn('Low stock warnings:', lowStockWarnings);
 			}
 
 			// STEP 2: Wrap all operations in a transaction-like batch
@@ -176,7 +202,7 @@ export const actions: Actions = {
 				db.insert(payments).values({
 					id: generateId(),
 					transactionId,
-					paymentMethod: paymentMethod as any,
+					paymentMethod: paymentMethod as PaymentMethod,
 					amount: total,
 					referenceNumber: null
 				})
